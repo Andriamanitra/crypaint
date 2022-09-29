@@ -1,13 +1,15 @@
 # CryPaint
 
-A drawing program written in Crystal using ImgUi and SFML. Work in progress!
+A drawing program written in Crystal using [ImGui](https://github.com/ocornut/imgui) and [SFML](https://www.sfml-dev.org/). Work in progress!
 
 ## Development
 
-1. Install SFML (`sfml2-devel` on OpenSUSE, something similar on other distros)
-2. `shards install`
-3. `export LD_LIBRARY_PATH="$(pwd)/lib/imgui-sfml"` to make sure `libcimgui.so` is found
-4. Start hacking
+1. Make sure you have [Crystal-lang](https://crystal-lang.org/) installed
+2. Install [SFML](https://www.sfml-dev.org/) (`sfml2-devel` on OpenSUSE, something similar on other distros)
+3. Install dependencies with `shards install`
+4. Run `export LD_LIBRARY_PATH="$(pwd)/lib/imgui-sfml"` to make sure `libcimgui.so` is found
+5. Run the program with `shards run` (or `shards build` to just compile)
+6. Start hacking
 
 ## Contributing
 
