@@ -66,11 +66,9 @@ class ColorsWidget < CryWidget
         button_size = ImGui::ImVec2.new(20, 20)
 
         @palette.each_index do |i|
-          # ImGui.push_id(i)
           ImGui.same_line if i % 6 > 0
           color = @palette[i]
           if ImGui.color_button("##palette#{i}", @palette[i], palette_flags, button_size)
-            # @colors.primary = ImGui::ImVec4.new(color.x, color.y, color.z, color.w)
             @colors.set_primary(color)
           end
           ImGui.drag_drop_target do
@@ -79,7 +77,6 @@ class ColorsWidget < CryWidget
               @palette[i] = ImGui.rgb(data[0], data[1], data[2], 1.0_f32)
             end
           end
-          # ImGui.pop_id()
         end
       end
     end
