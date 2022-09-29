@@ -4,6 +4,8 @@ require "imgui-sfml"
 require "./overlay_mousepos.cr"
 
 class CryPaintWindow < SF::RenderWindow
+  @palette : Array(ImGui::ImVec4)
+
   def initialize
     videomode = SF::VideoMode.new(1280, 720)
     title = "CryPaint ALPHA"
@@ -11,11 +13,21 @@ class CryPaintWindow < SF::RenderWindow
     super(videomode, title, settings: settings)
     @shapes = [] of SF::Drawable
     @undo_idx = 0
+    @color = ImGui.color(255, 0, 255)
+    @bkup_color = @color
+    @palette = (0...36).map { |i|
+      ImGui.hsv(i / 36_f32, 0.8_f32, 0.8_f32)
+    }
   end
 
   def draw_at(x, y)
     radius = 10
+    r = (@color.x * 255).to_i
+    g = (@color.y * 255).to_i
+    b = (@color.z * 255).to_i
+    alpha = (@color.w * 255).to_i
     shape = SF::CircleShape.new(radius)
+    shape.fill_color = SF::Color.new(r, g, b, alpha)
     shape.move(x - radius, y - radius)
     # invalidate the current "redo" queue on draw
     if @undo_idx < @shapes.size
@@ -23,6 +35,11 @@ class CryPaintWindow < SF::RenderWindow
     end
     @shapes << shape
     @undo_idx += 1
+  end
+
+  def set_current_color(color)
+    @color = color
+    @bkup_color = color
   end
 
   def new_drawing
@@ -115,6 +132,46 @@ class CryPaintWindow < SF::RenderWindow
           ImGui.menu_item("Cut", "Ctrl+X")
           ImGui.menu_item("Copy", "Ctrl+C")
           ImGui.menu_item("Paste", "Ctrl+V")
+        end
+      end
+
+      ImGui.window("Colors", flags: ImGui::ImGuiWindowFlags::AlwaysAutoResize) do
+        ImGui.separator
+        ImGui.color_picker4(
+          "##picker",
+          pointerof(@color),
+          ImGui::ImGuiColorEditFlags::NoSidePreview |
+          ImGui::ImGuiColorEditFlags::NoSmallPreview |
+          ImGui::ImGuiColorEditFlags::AlphaBar
+        )
+        ImGui.same_line
+        ImGui.group do
+          preview_button_size = ImGui::ImVec2.new(80, 30)
+          preview_button_flags = ImGui::ImGuiColorEditFlags::NoPicker | ImGui::ImGuiColorEditFlags::AlphaPreviewHalf
+          if ImGui.color_button("##current", @color, preview_button_flags, preview_button_size)
+            set_current_color(@color)
+          end
+          if ImGui.color_button("##previous", @bkup_color, preview_button_flags, preview_button_size)
+            set_current_color(@bkup_color)
+          end
+          ImGui.separator
+          ImGui.text("Palette")
+          palette_flags = ImGui::ImGuiColorEditFlags::NoPicker |
+                          ImGui::ImGuiColorEditFlags::NoTooltip
+          button_size = ImGui::ImVec2.new(20, 20)
+          (0...@palette.size).each do |i|
+            ImGui.same_line if i % 6 > 0
+            color = @palette[i]
+            if ImGui.color_button("##palette#{i}", @palette[i], palette_flags, button_size)
+              set_current_color(ImGui::ImVec4.new(color.x, color.y, color.z, @color.w))
+            end
+            ImGui.drag_drop_target do
+              if payload = ImGui.accept_drag_drop_payload(ImGui::PAYLOAD_TYPE_COLOR_4F)
+                data = payload.data.as(Float32*)
+                @palette[i] = ImGui.rgb(data[0], data[1], data[2])
+              end
+            end
+          end
         end
       end
 
