@@ -1,14 +1,10 @@
 require "crsfml"
 require "imgui"
 require "imgui-sfml"
-require "./gui_mousepos.cr"
-require "./gui_colors.cr"
+require "./widgets/*"
+require "./colors.cr"
 
 class CryPaintWindow < SF::RenderWindow
-
-  include GUI_Colors
-  include GUI_MousePos
-
   def initialize
     videomode = SF::VideoMode.new(1280, 720)
     title = "CryPaint ALPHA"
@@ -16,16 +12,22 @@ class CryPaintWindow < SF::RenderWindow
     super(videomode, title, settings: settings)
     @shapes = [] of SF::Drawable
     @undo_idx = 0
-    @color = ImGui.color(255, 0, 255)
-    @bkup_color = @color
+    @colors = CryPaint::Colors.new
+    @widgets = [] of CryWidget
+    @widgets << ColorsWidget.new(@colors)
+    @widgets << MousePosWidget.new
+  end
+
+  def register_widget(widget : CryWidget)
+    @widgets << widget
   end
 
   def draw_at(x, y)
     radius = 10
-    r = (@color.x * 255).to_i
-    g = (@color.y * 255).to_i
-    b = (@color.z * 255).to_i
-    alpha = (@color.w * 255).to_i
+    r = (@colors.primary.x * 255).to_i
+    g = (@colors.primary.y * 255).to_i
+    b = (@colors.primary.z * 255).to_i
+    alpha = (@colors.primary.w * 255).to_i
     shape = SF::CircleShape.new(radius)
     shape.fill_color = SF::Color.new(r, g, b, alpha)
     shape.move(x - radius, y - radius)
@@ -35,11 +37,6 @@ class CryPaintWindow < SF::RenderWindow
     end
     @shapes << shape
     @undo_idx += 1
-  end
-
-  def set_current_color(color)
-    @color = color
-    @bkup_color = color
   end
 
   def new_drawing
@@ -94,9 +91,7 @@ class CryPaintWindow < SF::RenderWindow
 
   def run
     ImGui::SFML.init(self)
-    mouse_coords_visible = true
     imgui_demo_visible = false
-    colors_window_visible = true
     clock = SF::Clock.new
 
     while open?
@@ -114,14 +109,13 @@ class CryPaintWindow < SF::RenderWindow
           ImGui.menu_item("Save", "Ctrl+S")
         end
         ImGui.menu("View") do
-          if ImGui.menu_item("Mouse position", nil, mouse_coords_visible)
-            mouse_coords_visible = !mouse_coords_visible
-          end
-          if ImGui.menu_item("Colors", nil, colors_window_visible)
-            colors_window_visible = !colors_window_visible
-          end
           if ImGui.menu_item("ImGui demo", nil, imgui_demo_visible)
             imgui_demo_visible = !imgui_demo_visible
+          end
+          @widgets.each do |widget|
+            if ImGui.menu_item(widget.name_in_menu, nil, widget.visible?)
+              widget.toggle_visibility
+            end
           end
         end
         ImGui.menu("Edit") do
@@ -138,9 +132,8 @@ class CryPaintWindow < SF::RenderWindow
         end
       end
 
-      show_colors_window() if colors_window_visible
-      show_mousepos_window() if mouse_coords_visible
       ImGui.show_demo_window if imgui_demo_visible
+      @widgets.each(&.show)
 
       @undo_idx.times do |i|
         draw(@shapes[i])

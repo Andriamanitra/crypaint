@@ -1,6 +1,14 @@
-module GUI_MousePos
+require "imgui"
+require "./crywidget.cr"
 
-  def show_mousepos_window
+class MousePosWidget < CryWidget
+  def initialize
+    @visible = true
+  end
+
+  def show
+    return if !@visible
+
     viewport = ImGui.get_main_viewport
     work_pos = viewport.work_pos
     work_size = viewport.work_size
@@ -27,4 +35,15 @@ module GUI_MousePos
     end
   end
 
+  def name_in_menu : String
+    "Mouse position"
+  end
+
+  def toggle_visibility
+    @visible = !@visible
+  end
+
+  def visible? : Bool
+    @visible
+  end
 end
