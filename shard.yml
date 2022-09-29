@@ -1,0 +1,21 @@
+name: crypaint
+version: 0.1.0
+
+authors:
+  - Andriamanitra
+
+dependencies:
+  crsfml:
+    github: oprypin/crsfml
+  imgui:
+    github: oprypin/crystal-imgui
+  imgui-sfml:
+    github: oprypin/crystal-imgui-sfml
+
+targets:
+  crypaint:
+    main: src/crypaint.cr
+
+crystal: 1.5.1
+
+license: MIT
