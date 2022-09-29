@@ -4,6 +4,8 @@ A drawing program written in Crystal using [ImGui](https://github.com/ocornut/im
 
 ## Development
 
+Plans / architecture diagram: https://excalidraw.com/#json=m5sCvO5yNIEFSed_-EKVO,k7vhCpeEJONCJBvMlRmPeQ
+
 1. Make sure you have [Crystal-lang](https://crystal-lang.org/) installed
 2. Install [SFML](https://www.sfml-dev.org/) (`sfml2-devel` on OpenSUSE, something similar on other distros)
 3. Install dependencies with `shards install`
