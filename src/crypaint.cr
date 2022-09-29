@@ -1,10 +1,13 @@
 require "crsfml"
 require "imgui"
 require "imgui-sfml"
-require "./overlay_mousepos.cr"
+require "./gui_mousepos.cr"
+require "./gui_colors.cr"
 
 class CryPaintWindow < SF::RenderWindow
-  @palette : Array(ImGui::ImVec4)
+
+  include GUI_Colors
+  include GUI_MousePos
 
   def initialize
     videomode = SF::VideoMode.new(1280, 720)
@@ -15,9 +18,6 @@ class CryPaintWindow < SF::RenderWindow
     @undo_idx = 0
     @color = ImGui.color(255, 0, 255)
     @bkup_color = @color
-    @palette = (0...36).map { |i|
-      ImGui.hsv(i / 36_f32, 0.8_f32, 0.8_f32)
-    }
   end
 
   def draw_at(x, y)
@@ -96,7 +96,7 @@ class CryPaintWindow < SF::RenderWindow
     ImGui::SFML.init(self)
     mouse_coords_visible = true
     imgui_demo_visible = false
-    about_visible = false
+    colors_window_visible = true
     clock = SF::Clock.new
 
     while open?
@@ -117,6 +117,9 @@ class CryPaintWindow < SF::RenderWindow
           if ImGui.menu_item("Mouse position", nil, mouse_coords_visible)
             mouse_coords_visible = !mouse_coords_visible
           end
+          if ImGui.menu_item("Colors", nil, colors_window_visible)
+            colors_window_visible = !colors_window_visible
+          end
           if ImGui.menu_item("ImGui demo", nil, imgui_demo_visible)
             imgui_demo_visible = !imgui_demo_visible
           end
@@ -135,47 +138,8 @@ class CryPaintWindow < SF::RenderWindow
         end
       end
 
-      ImGui.window("Colors", flags: ImGui::ImGuiWindowFlags::AlwaysAutoResize) do
-        ImGui.separator
-        ImGui.color_picker4(
-          "##picker",
-          pointerof(@color),
-          ImGui::ImGuiColorEditFlags::NoSidePreview |
-          ImGui::ImGuiColorEditFlags::NoSmallPreview |
-          ImGui::ImGuiColorEditFlags::AlphaBar
-        )
-        ImGui.same_line
-        ImGui.group do
-          preview_button_size = ImGui::ImVec2.new(80, 30)
-          preview_button_flags = ImGui::ImGuiColorEditFlags::NoPicker | ImGui::ImGuiColorEditFlags::AlphaPreviewHalf
-          if ImGui.color_button("##current", @color, preview_button_flags, preview_button_size)
-            set_current_color(@color)
-          end
-          if ImGui.color_button("##previous", @bkup_color, preview_button_flags, preview_button_size)
-            set_current_color(@bkup_color)
-          end
-          ImGui.separator
-          ImGui.text("Palette")
-          palette_flags = ImGui::ImGuiColorEditFlags::NoPicker |
-                          ImGui::ImGuiColorEditFlags::NoTooltip
-          button_size = ImGui::ImVec2.new(20, 20)
-          (0...@palette.size).each do |i|
-            ImGui.same_line if i % 6 > 0
-            color = @palette[i]
-            if ImGui.color_button("##palette#{i}", @palette[i], palette_flags, button_size)
-              set_current_color(ImGui::ImVec4.new(color.x, color.y, color.z, @color.w))
-            end
-            ImGui.drag_drop_target do
-              if payload = ImGui.accept_drag_drop_payload(ImGui::PAYLOAD_TYPE_COLOR_4F)
-                data = payload.data.as(Float32*)
-                @palette[i] = ImGui.rgb(data[0], data[1], data[2])
-              end
-            end
-          end
-        end
-      end
-
-      mouse_position_overlay() if mouse_coords_visible
+      show_colors_window() if colors_window_visible
+      show_mousepos_window() if mouse_coords_visible
       ImGui.show_demo_window if imgui_demo_visible
 
       @undo_idx.times do |i|
