@@ -7,7 +7,7 @@ module CryPaint
     def initialize(window : CryPaint::CryPaintWindow, colors : CryPaint::Colors)
       @window = window
       @colors = colors
-      @visible = false
+      @visible = true
       @vx = 0_f32
       @vy = 0_f32
       @vrot = 0_f32
@@ -17,11 +17,11 @@ module CryPaint
       @color_variance = ImVec4.new(0.004_f32, 0.004_f32, 0.004_f32, 0_f32)
       @color_variance_momentum = ImVec4.new
       @momentum_factor = 0.01_f32
-      @stored_view_state = @window.view.dup
     end
 
     def reset_view
-      @window.view = @stored_view_state.dup
+      @window.center_view()
+      @window.view.size = @window.size
     end
 
     def reset_settings
@@ -81,10 +81,22 @@ module CryPaint
       end
 
       ImGui.window("Special FX", flags: ImGuiWindowFlags::NoFocusOnAppearing) do
-        ImGui.slider_float("Vx", pointerof(@vx), -1_f32, 1_f32)
-        ImGui.slider_float("Vy", pointerof(@vy), -1_f32, 1_f32)
-        ImGui.slider_float("Vrot", pointerof(@vrot), -1_f32, 1_f32)
-        ImGui.slider_float("Vzoom", pointerof(@vzoom), -1_f32, 1_f32)
+        ImGui.slider_float("v_x", pointerof(@vx), -1_f32, 1_f32)
+        ImGui.same_line
+        @vx = 0_f32 if ImGui.button("Reset##vx")
+
+        ImGui.slider_float("v_y", pointerof(@vy), -1_f32, 1_f32)
+        ImGui.same_line
+        @vy = 0_f32 if ImGui.button("Reset##vy")
+
+        ImGui.slider_float("v_rot", pointerof(@vrot), -10_f32, 10_f32)
+        ImGui.same_line
+        @vrot = 0_f32 if ImGui.button("Reset##vrot")
+
+        ImGui.slider_float("v_zoom", pointerof(@vzoom), -1_f32, 1_f32)
+        ImGui.same_line
+        @vzoom = 0_f32 if ImGui.button("Reset##vzoom")
+
         ImGui.checkbox("Randomize colors", pointerof(@rng_colors_enabled))
         ImGui.drag_float4("Color variance", pointerof(@color_variance), v_speed: 0.001_f32, v_min: 0_f32, v_max: 1_f32)
         ImGui.drag_float("Color change momentum", pointerof(@momentum_factor), 0.0001_f32)
@@ -103,12 +115,8 @@ module CryPaint
     end
 
     def toggle_visibility
-      if @visible
-        # return view back to normal when closing the special fx window
-        reset_view()
-      else
-        @stored_view_state = @window.view.dup
-      end
+      # return view back to normal when closing the special fx window
+      reset_view() if @visible
       @visible = !@visible
     end
 
