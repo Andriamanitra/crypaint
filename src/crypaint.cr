@@ -4,218 +4,220 @@ require "imgui-sfml"
 require "./widgets/*"
 require "./colors.cr"
 
-class CryPaintWindow < SF::RenderWindow
-  def initialize
-    @width = 1280
-    @height = 720
-    videomode = SF::VideoMode.new(@width, @height)
-    title = "CryPaint ALPHA"
-    settings = SF::ContextSettings.new(depth: 24, antialiasing: 0)
-    super(videomode, title, settings: settings)
-    @shapes = [] of SF::Drawable
-    @undo_idx = 0
-    @colors = CryPaint::Colors.new
-    @widgets = [] of CryWidget
-    @widgets << ColorsWidget.new(@colors)
-    @widgets << MousePosWidget.new
-    @imagetex = SF::Texture.new
-    @sprite = SF::Sprite.new(@imagetex)
-    @has_image = false
-    # Workaround for https://github.com/ocornut/imgui/issues/331
-    @file_open_dialog_visible = false
-  end
+module CryPaint
+  include ImGui::TopLevel
 
-  def center_view
-    self.view.center = {0.5 * @width, 0.5 * @height}
-    centerw = (@imagetex.size.x - @width) / 2
-    centerh = (@imagetex.size.y - @height) / 2
-    self.view.move(centerw, centerh)
-  end
-
-  def load_image(image : SF::Image) : Bool
-    if success = @imagetex.load_from_image(image)
-      new_drawing()
-      @sprite.set_texture(@imagetex, reset_rect: true)
-      center_view()
-      @has_image = true
+  class CryPaintWindow < SF::RenderWindow
+    def initialize
+      @width = 1280
+      @height = 720
+      videomode = SF::VideoMode.new(@width, @height)
+      title = "CryPaint ALPHA"
+      settings = SF::ContextSettings.new(depth: 24, antialiasing: 0)
+      super(videomode, title, settings: settings)
+      @shapes = [] of SF::Drawable
+      @undo_idx = 0
+      @colors = CryPaint::Colors.new
+      @widgets = [] of CryWidget
+      @widgets << ColorsWidget.new(@colors)
+      @widgets << MousePosWidget.new
+      @imagetex = SF::Texture.new
+      @sprite = SF::Sprite.new(@imagetex)
+      @has_image = false
+      # Workaround for https://github.com/ocornut/imgui/issues/331
+      @file_open_dialog_visible = false
     end
-    success
-  end
 
-  def load_image(filepath : String) : Bool
-    if success = @imagetex.load_from_file(filepath)
-      new_drawing()
-      @sprite.set_texture(@imagetex, reset_rect: true)
-      center_view()
-      @has_image = true
+    def center_view
+      self.view.center = {0.5 * @width, 0.5 * @height}
+      centerw = (@imagetex.size.x - @width) / 2
+      centerh = (@imagetex.size.y - @height) / 2
+      self.view.move(centerw, centerh)
     end
-    success
-  end
 
-  def register_widget(widget : CryWidget)
-    @widgets << widget
-  end
-
-  def draw_at(x, y)
-    radius = 10
-    r = (@colors.primary.x * 255).to_i
-    g = (@colors.primary.y * 255).to_i
-    b = (@colors.primary.z * 255).to_i
-    alpha = (@colors.primary.w * 255).to_i
-    shape = SF::CircleShape.new(radius)
-    shape.fill_color = SF::Color.new(r, g, b, alpha)
-    shape.move(x - radius, y - radius)
-    # invalidate the current "redo" queue on draw
-    if @undo_idx < @shapes.size
-      @shapes.pop(@shapes.size - @undo_idx)
-    end
-    @shapes << shape
-    @undo_idx += 1
-  end
-
-  def new_drawing
-    @has_image = false
-    @shapes.clear
-    @undo_idx = 0
-  end
-
-  def undo
-    @undo_idx -= 1 if @undo_idx > 0
-  end
-
-  def redo
-    @undo_idx += 1 if @undo_idx < @shapes.size
-  end
-
-  def process_mouse_event(event : SF::Event)
-    if event.is_a? SF::Event::MouseMoveEvent
-      if SF::Mouse.button_pressed?(SF::Mouse::Button::Left)
-        coord = map_pixel_to_coords({event.x, event.y})
-        draw_at(coord.x, coord.y)
+    def load_image(image : SF::Image) : Bool
+      if success = @imagetex.load_from_image(image)
+        new_drawing()
+        @sprite.set_texture(@imagetex, reset_rect: true)
+        center_view()
+        @has_image = true
       end
+      success
     end
-  end
 
-  def process_keyboard_event(event : SF::Event::KeyEvent)
-    if event.control
-      case event.code
-      when SF::Keyboard::Key::O
-        @file_open_dialog_visible = true
-      when SF::Keyboard::Key::N
-        new_drawing
-      when SF::Keyboard::Key::Z
-        event.shift ? redo() : undo()
+    def load_image(filepath : String) : Bool
+      if success = @imagetex.load_from_file(filepath)
+        new_drawing()
+        @sprite.set_texture(@imagetex, reset_rect: true)
+        center_view()
+        @has_image = true
       end
+      success
     end
-  end
 
-  def process_events
-    while (event = poll_event())
-      ImGui::SFML.process_event(self, event)
-      io = ImGui.get_io
-
-      if !io.want_capture_mouse
-        process_mouse_event(event)
-      end
-
-      if !io.want_capture_keyboard && event.is_a? SF::Event::KeyEvent
-        process_keyboard_event(event)
-      end
-
-      close() if event.is_a? SF::Event::Closed
+    def register_widget(widget : CryWidget)
+      @widgets << widget
     end
-  end
 
-  def run
-    ImGui::SFML.init(self)
-    imgui_demo_visible = false
-    clock = SF::Clock.new
-    @file_open_dialog_visible = false
+    def draw_at(x, y)
+      radius = 10
+      r = (@colors.primary.x * 255).to_i
+      g = (@colors.primary.y * 255).to_i
+      b = (@colors.primary.z * 255).to_i
+      alpha = (@colors.primary.w * 255).to_i
+      shape = SF::CircleShape.new(radius)
+      shape.fill_color = SF::Color.new(r, g, b, alpha)
+      shape.move(x - radius, y - radius)
+      # invalidate the current "redo" queue on draw
+      if @undo_idx < @shapes.size
+        @shapes.pop(@shapes.size - @undo_idx)
+      end
+      @shapes << shape
+      @undo_idx += 1
+    end
 
-    while open?
-      clear()
-      process_events()
+    def new_drawing
+      @has_image = false
+      @shapes.clear
+      @undo_idx = 0
+    end
 
-      ImGui::SFML.update(self, clock.restart)
+    def undo
+      @undo_idx -= 1 if @undo_idx > 0
+    end
 
-      ImGui.main_menu_bar do
-        ImGui.menu("File") do
-          if ImGui.menu_item("New", "Ctrl+N")
-            new_drawing()
-          end
-          if ImGui.menu_item("Open", "Ctrl+O")
-            @file_open_dialog_visible = true
-          end
-          ImGui.menu_item("(TODO) Save", "Ctrl+S")
+    def redo
+      @undo_idx += 1 if @undo_idx < @shapes.size
+    end
+
+    def process_mouse_event(event : SF::Event)
+      if event.is_a? SF::Event::MouseMoveEvent
+        if SF::Mouse.button_pressed?(SF::Mouse::Button::Left)
+          coord = map_pixel_to_coords({event.x, event.y})
+          draw_at(coord.x, coord.y)
         end
-        ImGui.menu("View") do
-          if ImGui.menu_item("ImGui demo", nil, imgui_demo_visible)
-            imgui_demo_visible = !imgui_demo_visible
+      end
+    end
+
+    def process_keyboard_event(event : SF::Event::KeyEvent)
+      if event.control
+        case event.code
+        when SF::Keyboard::Key::O
+          @file_open_dialog_visible = true
+        when SF::Keyboard::Key::N
+          new_drawing
+        when SF::Keyboard::Key::Z
+          event.shift ? redo() : undo()
+        end
+      end
+    end
+
+    def process_events
+      while (event = poll_event())
+        ImGui::SFML.process_event(self, event)
+        io = ImGui.get_io
+
+        if !io.want_capture_mouse
+          process_mouse_event(event)
+        end
+
+        if !io.want_capture_keyboard && event.is_a? SF::Event::KeyEvent
+          process_keyboard_event(event)
+        end
+
+        close() if event.is_a? SF::Event::Closed
+      end
+    end
+
+    def run
+      ImGui::SFML.init(self)
+      imgui_demo_visible = false
+      clock = SF::Clock.new
+      @file_open_dialog_visible = false
+
+      while open?
+        clear()
+        process_events()
+
+        ImGui::SFML.update(self, clock.restart)
+
+        ImGui.main_menu_bar do
+          ImGui.menu("File") do
+            if ImGui.menu_item("New", "Ctrl+N")
+              new_drawing()
+            end
+            if ImGui.menu_item("Open", "Ctrl+O")
+              @file_open_dialog_visible = true
+            end
+            ImGui.menu_item("(TODO) Save", "Ctrl+S")
           end
-          @widgets.each do |widget|
-            if ImGui.menu_item(widget.name_in_menu, nil, widget.visible?)
-              widget.toggle_visibility
+          ImGui.menu("View") do
+            if ImGui.menu_item("ImGui demo", nil, imgui_demo_visible)
+              imgui_demo_visible = !imgui_demo_visible
+            end
+            @widgets.each do |widget|
+              if ImGui.menu_item(widget.name_in_menu, nil, widget.visible?)
+                widget.toggle_visibility
+              end
             end
           end
+          ImGui.menu("Edit") do
+            if ImGui.menu_item("Undo", "Ctrl+Z")
+              undo()
+            end
+            if ImGui.menu_item("Redo", "Ctrl+Shift+Z")
+              redo()
+            end
+            ImGui.separator
+            ImGui.menu_item("(TODO) Cut", "Ctrl+X")
+            ImGui.menu_item("(TODO) Copy", "Ctrl+C")
+            ImGui.menu_item("(TODO) Paste", "Ctrl+V")
+          end
         end
-        ImGui.menu("Edit") do
-          if ImGui.menu_item("Undo", "Ctrl+Z")
-            undo()
-          end
-          if ImGui.menu_item("Redo", "Ctrl+Shift+Z")
-            redo()
-          end
-          ImGui.separator
-          ImGui.menu_item("(TODO) Cut", "Ctrl+X")
-          ImGui.menu_item("(TODO) Copy", "Ctrl+C")
-          ImGui.menu_item("(TODO) Paste", "Ctrl+V")
-        end
-      end
 
-      # Conditionally rendered ImGui elements
+        # Conditionally rendered ImGui elements
 
-      ImGui.show_demo_window if imgui_demo_visible
-      if @file_open_dialog_visible
-        ImGui.open_popup("Open file..")
-        center = ImGui.get_main_viewport.get_center
-        modal_flags = ImGui::ImGuiWindowFlags::AlwaysAutoResize
-        ImGui.set_next_window_pos(center, ImGui::ImGuiCond::Appearing, ImGui::ImVec2.new(0.5f32, 0.5f32))
+        ImGui.show_demo_window if imgui_demo_visible
+        if @file_open_dialog_visible
+          ImGui.open_popup("Open file..")
+          center = ImGui.get_main_viewport.get_center
+          modal_flags = ImGuiWindowFlags::AlwaysAutoResize
+          ImGui.set_next_window_pos(center, ImGuiCond::Appearing, ImVec2.new(0.5f32, 0.5f32))
 
-        filepath_buf = ImGui::TextBuffer.new("", 96)
-
-        ImGui.popup_modal("Open file..", flags: modal_flags) do
-          # TODO: ImGui.input_text
-          if ImGui.button("Cancel", ImGui::ImVec2.new(120, 0))
-            ImGui.close_current_popup
-            @file_open_dialog_visible = false
-          end
-          ["test.png", "test2.png", "test3.png"].each do |fname|
-            ImGui.same_line
-            if ImGui.button(fname, ImGui::ImVec2.new(120, 0))
-              if load_image(fname)
-                ImGui.close_current_popup
-                @file_open_dialog_visible = false
+          ImGui.popup_modal("Open file..", flags: modal_flags) do
+            # TODO: ImGui.input_text
+            if ImGui.button("Cancel", ImVec2.new(120, 0))
+              ImGui.close_current_popup
+              @file_open_dialog_visible = false
+            end
+            ["test.png", "test2.png", "test3.png"].each do |fname|
+              ImGui.same_line
+              if ImGui.button(fname, ImVec2.new(120, 0))
+                if load_image(fname)
+                  ImGui.close_current_popup
+                  @file_open_dialog_visible = false
+                end
               end
             end
           end
         end
+
+        @widgets.each(&.show)
+
+        draw(@sprite) if @has_image
+
+        @undo_idx.times do |i|
+          draw(@shapes[i])
+        end
+
+        # SF.vector2f(100.0, 100.0)
+
+        ImGui::SFML.render(self)
+        display()
       end
-
-      @widgets.each(&.show)
-
-      draw(@sprite) if @has_image
-
-      @undo_idx.times do |i|
-        draw(@shapes[i])
-      end
-
-      # SF.vector2f(100.0, 100.0)
-
-      ImGui::SFML.render(self)
-      display()
+      ImGui::SFML.shutdown
     end
-    ImGui::SFML.shutdown
   end
 end
 
-CryPaintWindow.new.run
+CryPaint::CryPaintWindow.new.run

@@ -2,9 +2,9 @@ require "imgui"
 
 module CryPaint
   class Colors
-    getter primary : ImGui::ImVec4
-    getter secondary : ImGui::ImVec4
-    getter backup : ImGui::ImVec4
+    getter primary : ImVec4
+    getter secondary : ImVec4
+    getter backup : ImVec4
 
     def initialize
       @primary = ImGui.color(255, 0, 255)
@@ -15,17 +15,17 @@ module CryPaint
     end
 
     # used by color picker to NOT update @backup at the same time
-    def primary=(color : ImGui::ImVec4)
+    def primary=(color : ImVec4)
       @primary = color
     end
 
-    def set_primary(color : ImGui::ImVec4)
+    def set_primary(color : ImVec4)
       color.w = @primary.w
       @primary = color
       @backup = color
     end
 
-    def set_secondary(color : ImGui::ImVec4)
+    def set_secondary(color : ImVec4)
       color.w = @primary.w
       @secondary = color
     end
