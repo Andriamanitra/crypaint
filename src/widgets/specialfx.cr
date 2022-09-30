@@ -8,8 +8,7 @@ module CryPaint
       @window = window
       @colors = colors
       @visible = true
-      @vx = 0_f32
-      @vy = 0_f32
+      @vxy = ImVec2.new
       @vrot = 0_f32
       @vzoom = 0_f32
       @rng = Random.new
@@ -25,8 +24,7 @@ module CryPaint
     end
 
     def reset_settings
-      @vx = 0_f32
-      @vy = 0_f32
+      @vxy.x = @vxy.y = 0_f32
       @vrot = 0_f32
       @vzoom = 0_f32
       @rng_colors_enabled = false
@@ -39,7 +37,7 @@ module CryPaint
       return if !@visible
 
       # apply all the nonsense
-      @window.view.move(-@vx, -@vy)
+      @window.view.move(-@vxy.x, -@vxy.y)
       @window.view.rotate(@vrot)
       @window.view.zoom(1 + 0.003 * @vzoom)
       if @rng_colors_enabled
@@ -81,13 +79,9 @@ module CryPaint
       end
 
       ImGui.window("Special FX", flags: ImGuiWindowFlags::NoFocusOnAppearing) do
-        ImGui.slider_float("v_x", pointerof(@vx), -1_f32, 1_f32)
+        ImGui.slider_float2("v_xy", pointerof(@vxy), -2_f32, 2_f32)
         ImGui.same_line
-        @vx = 0_f32 if ImGui.button("Reset##vx")
-
-        ImGui.slider_float("v_y", pointerof(@vy), -1_f32, 1_f32)
-        ImGui.same_line
-        @vy = 0_f32 if ImGui.button("Reset##vy")
+        @vxy.x = @vxy.y = 0_f32 if ImGui.button("Reset##vy")
 
         ImGui.slider_float("v_rot", pointerof(@vrot), -10_f32, 10_f32)
         ImGui.same_line
