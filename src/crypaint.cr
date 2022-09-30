@@ -8,6 +8,9 @@ module CryPaint
   include ImGui::TopLevel
 
   class CryPaintWindow < SF::RenderWindow
+    @@MIN_VIEW_SIZE = 10_f32
+    @@MAX_VIEW_SIZE = 100000_f32
+
     def initialize
       @width = 1280
       @height = 720
@@ -25,26 +28,25 @@ module CryPaint
       # Workaround for https://github.com/ocornut/imgui/issues/331
       @file_open_dialog_visible = false
       # TODO: refactor the mouse handling business to separate class
-      @mouse_wheel_speed = 0.1
+      @zoom_factor = 1.05
       @mouse_drag_start = Hash(SF::Mouse::Button, SF::Vector2i).new
       @widgets = [] of CryWidget
       @widgets << ColorsWidget.new(@colors)
       @widgets << MousePosWidget.new
       @widgets << SpecialFxWidget.new(self, @colors)
       self.framerate_limit = 120
+      center_view()
     end
 
     def center_view
-      self.view.center = {0.5 * @width, 0.5 * @height}
-      centerw = (@imagetex.size.x - @width) / 2
-      centerh = (@imagetex.size.y - @height) / 2
-      self.view.move(centerw, centerh)
+      self.view.center = {0, 0}
     end
 
     def load_image(image : SF::Image) : Bool
       if success = @imagetex.load_from_image(image)
         new_drawing()
         @sprite.set_texture(@imagetex, reset_rect: true)
+        @sprite.origin = @imagetex.size / 2
         center_view()
         @has_image = true
       end
@@ -55,6 +57,7 @@ module CryPaint
       if success = @imagetex.load_from_file(filepath)
         new_drawing()
         @sprite.set_texture(@imagetex, reset_rect: true)
+        @sprite.origin = @imagetex.size / 2
         center_view()
         @has_image = true
       end
@@ -112,11 +115,13 @@ module CryPaint
 
     def process_mouse_event(event : SF::Event)
       if event.is_a? SF::Event::MouseWheelScrollEvent
-        # TODO: zooming doesn't quite focus on the right point
-        dx = (event.x - 0.5 * @width) * event.delta * @mouse_wheel_speed
-        dy = (event.y - 0.5 * @height) * event.delta * @mouse_wheel_speed
-        self.view.move(dx, dy)
-        self.view.zoom(1 - @mouse_wheel_speed * event.delta)
+        before = map_pixel_to_coords({event.x, event.y})
+        return if event.delta > 0 && self.view.size.y < @@MIN_VIEW_SIZE
+        return if event.delta < 0 && self.view.size.y > @@MAX_VIEW_SIZE
+
+        self.view.zoom(@zoom_factor ** -event.delta)
+        after = map_pixel_to_coords({event.x, event.y})
+        self.view.move(before - after)
       elsif event.is_a? SF::Event::MouseButtonPressed
         @mouse_drag_start[event.button] = SF::Vector2i.new(event.x, event.y)
       elsif event.is_a? SF::Event::MouseButtonReleased
@@ -129,10 +134,20 @@ module CryPaint
         case event.code
         when SF::Keyboard::Key::O
           @file_open_dialog_visible = true
+        when SF::Keyboard::Key::Q
+          exit
         when SF::Keyboard::Key::N
           new_drawing
         when SF::Keyboard::Key::Z
           event.shift ? redo() : undo()
+        when SF::Keyboard::Key::Add
+          self.view.zoom(1 / @zoom_factor)
+        when SF::Keyboard::Key::Subtract
+          self.view.zoom(@zoom_factor)
+        when SF::Keyboard::Key::Numpad0
+          self.view.size = {@width, @height}
+        when SF::Keyboard::Key::Numpad5
+          center_view()
         end
       end
     end
