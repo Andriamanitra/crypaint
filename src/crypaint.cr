@@ -18,6 +18,7 @@ module CryPaint
       @shapes = [] of SF::Drawable
       @undo_idx = 0
       @colors = CryPaint::Colors.new
+      @draw_radius = 10
       @imagetex = SF::Texture.new
       @sprite = SF::Sprite.new(@imagetex)
       @has_image = false
@@ -64,15 +65,29 @@ module CryPaint
       @widgets << widget
     end
 
-    def draw_at(x, y, color : ImVec4 = @colors.primary)
-      radius = 10
+    def draw_between(prev, curr, color : ImVec4 = @colors.primary)
       r = (color.x * 255).to_i
       g = (color.y * 255).to_i
       b = (color.z * 255).to_i
       alpha = (@colors.primary.w * 255).to_i
-      shape = SF::CircleShape.new(radius)
-      shape.fill_color = SF::Color.new(r, g, b, alpha)
-      shape.move(x - radius, y - radius)
+      sf_color = SF::Color.new(r, g, b, alpha)
+      delta = curr - prev
+      dist = Math.hypot(delta.x, delta.y)
+      if dist > @draw_radius * 0.5_f32
+        # interpolate some more dots in between
+        steps = (2 * dist / @draw_radius).ceil.to_i
+        steps.times do |i|
+          c = prev + delta * ((i + 0.5) / steps)
+          draw_dot(c.x, c.y, sf_color)
+        end
+      end
+      draw_dot(curr.x, curr.y, sf_color)
+    end
+
+    def draw_dot(x, y, color : SF::Color)
+      shape = SF::CircleShape.new(@draw_radius)
+      shape.fill_color = color
+      shape.move(x - @draw_radius, y - @draw_radius)
       # invalidate the current "redo" queue on draw
       if @undo_idx < @shapes.size
         @shapes.pop(@shapes.size - @undo_idx)
@@ -104,6 +119,8 @@ module CryPaint
         self.view.zoom(1 - @mouse_wheel_speed * event.delta)
       elsif event.is_a? SF::Event::MouseButtonPressed
         @mouse_drag_start[event.button] = SF::Vector2i.new(event.x, event.y)
+      elsif event.is_a? SF::Event::MouseButtonReleased
+        @mouse_drag_start.delete(event.button)
       end
     end
 
@@ -140,13 +157,24 @@ module CryPaint
         mousepos = SF::Mouse.get_position(relative_to: self)
         coord = map_pixel_to_coords(mousepos)
         if SF::Mouse.button_pressed?(SF::Mouse::Button::Left)
-          draw_at(coord.x, coord.y, @colors.primary)
-        elsif SF::Mouse.button_pressed?(SF::Mouse::Button::Right)
-          draw_at(coord.x, coord.y, @colors.secondary)
-        elsif SF::Mouse.button_pressed?(SF::Mouse::Button::Middle)
-          previous_pos = @mouse_drag_start[SF::Mouse::Button::Middle]
-          prevcoord = map_pixel_to_coords(previous_pos)
-          self.view.move(prevcoord - coord)
+          if previous_pos = @mouse_drag_start[SF::Mouse::Button::Left]?
+            prevcoord = map_pixel_to_coords(previous_pos)
+            draw_between(prevcoord, coord, @colors.primary)
+          end
+          @mouse_drag_start[SF::Mouse::Button::Left] = mousepos
+        end
+        if SF::Mouse.button_pressed?(SF::Mouse::Button::Right)
+          if previous_pos = @mouse_drag_start[SF::Mouse::Button::Right]?
+            prevcoord = map_pixel_to_coords(previous_pos)
+            draw_between(prevcoord, coord, @colors.secondary)
+          end
+          @mouse_drag_start[SF::Mouse::Button::Right] = mousepos
+        end
+        if SF::Mouse.button_pressed?(SF::Mouse::Button::Middle)
+          if previous_pos = @mouse_drag_start[SF::Mouse::Button::Middle]?
+            prevcoord = map_pixel_to_coords(previous_pos)
+            self.view.move(prevcoord - coord)
+          end
           @mouse_drag_start[SF::Mouse::Button::Middle] = mousepos
         end
       end
@@ -199,7 +227,9 @@ module CryPaint
         end
 
         # Conditionally rendered ImGui elements
-
+        ImGui.window("Tool settings") do
+          ImGui.drag_int("Radius", pointerof(@draw_radius), v_min: 1, v_max: 9001)
+        end
         ImGui.show_demo_window if imgui_demo_visible
         if @file_open_dialog_visible
           ImGui.open_popup("Open file..")
