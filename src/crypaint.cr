@@ -18,14 +18,19 @@ module CryPaint
       @shapes = [] of SF::Drawable
       @undo_idx = 0
       @colors = CryPaint::Colors.new
-      @widgets = [] of CryWidget
-      @widgets << ColorsWidget.new(@colors)
-      @widgets << MousePosWidget.new
       @imagetex = SF::Texture.new
       @sprite = SF::Sprite.new(@imagetex)
       @has_image = false
       # Workaround for https://github.com/ocornut/imgui/issues/331
       @file_open_dialog_visible = false
+      # TODO: refactor the mouse handling business to separate class
+      @mouse_wheel_speed = 0.1
+      @mouse_drag_start = Hash(SF::Mouse::Button, SF::Vector2i).new
+      @widgets = [] of CryWidget
+      @widgets << ColorsWidget.new(@colors)
+      @widgets << MousePosWidget.new
+      @widgets << SpecialFxWidget.new(self, @colors)
+      self.framerate_limit = 120
     end
 
     def center_view
@@ -59,11 +64,11 @@ module CryPaint
       @widgets << widget
     end
 
-    def draw_at(x, y)
+    def draw_at(x, y, color : ImVec4 = @colors.primary)
       radius = 10
-      r = (@colors.primary.x * 255).to_i
-      g = (@colors.primary.y * 255).to_i
-      b = (@colors.primary.z * 255).to_i
+      r = (color.x * 255).to_i
+      g = (color.y * 255).to_i
+      b = (color.z * 255).to_i
       alpha = (@colors.primary.w * 255).to_i
       shape = SF::CircleShape.new(radius)
       shape.fill_color = SF::Color.new(r, g, b, alpha)
@@ -91,11 +96,14 @@ module CryPaint
     end
 
     def process_mouse_event(event : SF::Event)
-      if event.is_a? SF::Event::MouseMoveEvent
-        if SF::Mouse.button_pressed?(SF::Mouse::Button::Left)
-          coord = map_pixel_to_coords({event.x, event.y})
-          draw_at(coord.x, coord.y)
-        end
+      if event.is_a? SF::Event::MouseWheelScrollEvent
+        # TODO: zooming doesn't quite focus on the right point
+        dx = (event.x - 0.5 * @width) * event.delta * @mouse_wheel_speed
+        dy = (event.y - 0.5 * @height) * event.delta * @mouse_wheel_speed
+        self.view.move(dx, dy)
+        self.view.zoom(1 - @mouse_wheel_speed * event.delta)
+      elsif event.is_a? SF::Event::MouseButtonPressed
+        @mouse_drag_start[event.button] = SF::Vector2i.new(event.x, event.y)
       end
     end
 
@@ -113,9 +121,9 @@ module CryPaint
     end
 
     def process_events
+      io = ImGui.get_io
       while (event = poll_event())
         ImGui::SFML.process_event(self, event)
-        io = ImGui.get_io
 
         if !io.want_capture_mouse
           process_mouse_event(event)
@@ -126,6 +134,21 @@ module CryPaint
         end
 
         close() if event.is_a? SF::Event::Closed
+      end
+      # Handle mouse keys being held down
+      if !io.want_capture_mouse
+        mousepos = SF::Mouse.get_position(relative_to: self)
+        coord = map_pixel_to_coords(mousepos)
+        if SF::Mouse.button_pressed?(SF::Mouse::Button::Left)
+          draw_at(coord.x, coord.y, @colors.primary)
+        elsif SF::Mouse.button_pressed?(SF::Mouse::Button::Right)
+          draw_at(coord.x, coord.y, @colors.secondary)
+        elsif SF::Mouse.button_pressed?(SF::Mouse::Button::Middle)
+          previous_pos = @mouse_drag_start[SF::Mouse::Button::Middle]
+          prevcoord = map_pixel_to_coords(previous_pos)
+          self.view.move(prevcoord - coord)
+          @mouse_drag_start[SF::Mouse::Button::Middle] = mousepos
+        end
       end
     end
 
@@ -209,8 +232,6 @@ module CryPaint
         @undo_idx.times do |i|
           draw(@shapes[i])
         end
-
-        # SF.vector2f(100.0, 100.0)
 
         ImGui::SFML.render(self)
         display()
