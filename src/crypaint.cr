@@ -6,7 +6,9 @@ require "./colors.cr"
 
 class CryPaintWindow < SF::RenderWindow
   def initialize
-    videomode = SF::VideoMode.new(1280, 720)
+    @width = 1280
+    @height = 720
+    videomode = SF::VideoMode.new(@width, @height)
     title = "CryPaint ALPHA"
     settings = SF::ContextSettings.new(depth: 24, antialiasing: 0)
     super(videomode, title, settings: settings)
@@ -16,6 +18,38 @@ class CryPaintWindow < SF::RenderWindow
     @widgets = [] of CryWidget
     @widgets << ColorsWidget.new(@colors)
     @widgets << MousePosWidget.new
+    @imagetex = SF::Texture.new
+    @sprite = SF::Sprite.new(@imagetex)
+    @has_image = false
+    # Workaround for https://github.com/ocornut/imgui/issues/331
+    @file_open_dialog_visible = false
+  end
+
+  def center_view
+    self.view.center = {0.5 * @width, 0.5 * @height}
+    centerw = (@imagetex.size.x - @width) / 2
+    centerh = (@imagetex.size.y - @height) / 2
+    self.view.move(centerw, centerh)
+  end
+
+  def load_image(image : SF::Image) : Bool
+    if success = @imagetex.load_from_image(image)
+      new_drawing()
+      @sprite.set_texture(@imagetex, reset_rect: true)
+      center_view()
+      @has_image = true
+    end
+    success
+  end
+
+  def load_image(filepath : String) : Bool
+    if success = @imagetex.load_from_file(filepath)
+      new_drawing()
+      @sprite.set_texture(@imagetex, reset_rect: true)
+      center_view()
+      @has_image = true
+    end
+    success
   end
 
   def register_widget(widget : CryWidget)
@@ -40,6 +74,7 @@ class CryPaintWindow < SF::RenderWindow
   end
 
   def new_drawing
+    @has_image = false
     @shapes.clear
     @undo_idx = 0
   end
@@ -64,6 +99,8 @@ class CryPaintWindow < SF::RenderWindow
   def process_keyboard_event(event : SF::Event::KeyEvent)
     if event.control
       case event.code
+      when SF::Keyboard::Key::O
+        @file_open_dialog_visible = true
       when SF::Keyboard::Key::N
         new_drawing
       when SF::Keyboard::Key::Z
@@ -93,6 +130,7 @@ class CryPaintWindow < SF::RenderWindow
     ImGui::SFML.init(self)
     imgui_demo_visible = false
     clock = SF::Clock.new
+    @file_open_dialog_visible = false
 
     while open?
       clear()
@@ -105,8 +143,10 @@ class CryPaintWindow < SF::RenderWindow
           if ImGui.menu_item("New", "Ctrl+N")
             new_drawing()
           end
-          ImGui.menu_item("Open", "Ctrl+O")
-          ImGui.menu_item("Save", "Ctrl+S")
+          if ImGui.menu_item("Open", "Ctrl+O")
+            @file_open_dialog_visible = true
+          end
+          ImGui.menu_item("(TODO) Save", "Ctrl+S")
         end
         ImGui.menu("View") do
           if ImGui.menu_item("ImGui demo", nil, imgui_demo_visible)
@@ -126,18 +166,50 @@ class CryPaintWindow < SF::RenderWindow
             redo()
           end
           ImGui.separator
-          ImGui.menu_item("Cut", "Ctrl+X")
-          ImGui.menu_item("Copy", "Ctrl+C")
-          ImGui.menu_item("Paste", "Ctrl+V")
+          ImGui.menu_item("(TODO) Cut", "Ctrl+X")
+          ImGui.menu_item("(TODO) Copy", "Ctrl+C")
+          ImGui.menu_item("(TODO) Paste", "Ctrl+V")
         end
       end
 
+      # Conditionally rendered ImGui elements
+
       ImGui.show_demo_window if imgui_demo_visible
+      if @file_open_dialog_visible
+        ImGui.open_popup("Open file..")
+        center = ImGui.get_main_viewport.get_center
+        modal_flags = ImGui::ImGuiWindowFlags::AlwaysAutoResize
+        ImGui.set_next_window_pos(center, ImGui::ImGuiCond::Appearing, ImGui::ImVec2.new(0.5f32, 0.5f32))
+
+        filepath_buf = ImGui::TextBuffer.new("", 96)
+
+        ImGui.popup_modal("Open file..", flags: modal_flags) do
+          # TODO: ImGui.input_text
+          if ImGui.button("Cancel", ImGui::ImVec2.new(120, 0))
+            ImGui.close_current_popup
+            @file_open_dialog_visible = false
+          end
+          ["test.png", "test2.png", "test3.png"].each do |fname|
+            ImGui.same_line
+            if ImGui.button(fname, ImGui::ImVec2.new(120, 0))
+              if load_image(fname)
+                ImGui.close_current_popup
+                @file_open_dialog_visible = false
+              end
+            end
+          end
+        end
+      end
+
       @widgets.each(&.show)
+
+      draw(@sprite) if @has_image
 
       @undo_idx.times do |i|
         draw(@shapes[i])
       end
+
+      # SF.vector2f(100.0, 100.0)
 
       ImGui::SFML.render(self)
       display()
