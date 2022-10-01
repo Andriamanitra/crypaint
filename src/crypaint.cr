@@ -12,13 +12,12 @@ module CryPaint
     @@MAX_VIEW_SIZE = 100000_f32
 
     def initialize
-      @width = 1280
-      @height = 720
-      videomode = SF::VideoMode.new(@width, @height)
+      videomode = SF::VideoMode.new(1280, 720)
       title = "CryPaint ALPHA"
       settings = SF::ContextSettings.new(depth: 24, antialiasing: 0)
       super(videomode, title, settings: settings)
       @shapes = [] of SF::Drawable
+      @selected_shape = SF::CircleShape
       @undo_idx = 0
       @colors = CryPaint::Colors.new
       @draw_radius = 10
@@ -90,7 +89,7 @@ module CryPaint
     end
 
     def draw_dot(x, y, color : SF::Color)
-      shape = SF::CircleShape.new(@draw_radius)
+      shape = @selected_shape.new(@draw_radius)
       shape.fill_color = color
       shape.move(x - @draw_radius, y - @draw_radius)
       # invalidate the current "redo" queue on draw
@@ -156,7 +155,7 @@ module CryPaint
         when SF::Keyboard::Key::Subtract
           self.view.zoom(@zoom_factor)
         when SF::Keyboard::Key::Numpad0
-          self.view.size = {@width, @height}
+          self.view.size = {size.x, size.y}
         when SF::Keyboard::Key::Numpad5
           center_view()
         end
@@ -184,7 +183,7 @@ module CryPaint
         coord = map_pixel_to_coords(mousepos)
 
         # only when mouse inside the current window
-        if 0 < mousepos.x < @width && 0 < mousepos.y < @height
+        if 0 < mousepos.x < size.x && 0 < mousepos.y < size.y
           if SF::Mouse.button_pressed?(SF::Mouse::Button::Left)
             if previous_pos = @mouse_drag_start[SF::Mouse::Button::Left]?
               prevcoord = map_pixel_to_coords(previous_pos)
