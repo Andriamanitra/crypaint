@@ -34,6 +34,7 @@ module CryPaint
       @widgets << ColorsWidget.new(@colors)
       @widgets << MousePosWidget.new
       @widgets << SpecialFxWidget.new(self, @colors)
+      @widgets << ToolsWidget.new(pointerof(@draw_radius))
       self.framerate_limit = 120
       center_view()
     end
@@ -242,9 +243,6 @@ module CryPaint
         end
 
         # Conditionally rendered ImGui elements
-        ImGui.window("Tool settings") do
-          ImGui.drag_int("Radius", pointerof(@draw_radius), v_min: 1, v_max: 9001)
-        end
         ImGui.show_demo_window if imgui_demo_visible
         if @file_open_dialog_visible
           ImGui.open_popup("Open file..")
