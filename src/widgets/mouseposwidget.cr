@@ -4,7 +4,7 @@ require "./crywidget.cr"
 module CryPaint
   class MousePosWidget < CryWidget
     def initialize
-      @visible = true
+      @visible = false
     end
 
     def show
