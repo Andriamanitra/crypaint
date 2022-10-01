@@ -169,23 +169,28 @@ module CryPaint
         close() if event.is_a? SF::Event::Closed
       end
       # Handle mouse keys being held down
-      if !io.want_capture_mouse
+      if !io.want_capture_mouse && focus?
         mousepos = SF::Mouse.get_position(relative_to: self)
         coord = map_pixel_to_coords(mousepos)
-        if SF::Mouse.button_pressed?(SF::Mouse::Button::Left)
-          if previous_pos = @mouse_drag_start[SF::Mouse::Button::Left]?
-            prevcoord = map_pixel_to_coords(previous_pos)
-            draw_between(prevcoord, coord, @colors.primary)
+
+        # only when mouse inside the current window
+        if 0 < mousepos.x < @width && 0 < mousepos.y < @height
+          if SF::Mouse.button_pressed?(SF::Mouse::Button::Left)
+            if previous_pos = @mouse_drag_start[SF::Mouse::Button::Left]?
+              prevcoord = map_pixel_to_coords(previous_pos)
+              draw_between(prevcoord, coord, @colors.primary)
+            end
+            @mouse_drag_start[SF::Mouse::Button::Left] = mousepos
           end
-          @mouse_drag_start[SF::Mouse::Button::Left] = mousepos
-        end
-        if SF::Mouse.button_pressed?(SF::Mouse::Button::Right)
-          if previous_pos = @mouse_drag_start[SF::Mouse::Button::Right]?
-            prevcoord = map_pixel_to_coords(previous_pos)
-            draw_between(prevcoord, coord, @colors.secondary)
+          if SF::Mouse.button_pressed?(SF::Mouse::Button::Right)
+            if previous_pos = @mouse_drag_start[SF::Mouse::Button::Right]?
+              prevcoord = map_pixel_to_coords(previous_pos)
+              draw_between(prevcoord, coord, @colors.secondary)
+            end
+            @mouse_drag_start[SF::Mouse::Button::Right] = mousepos
           end
-          @mouse_drag_start[SF::Mouse::Button::Right] = mousepos
         end
+
         if SF::Mouse.button_pressed?(SF::Mouse::Button::Middle)
           if previous_pos = @mouse_drag_start[SF::Mouse::Button::Middle]?
             prevcoord = map_pixel_to_coords(previous_pos)
