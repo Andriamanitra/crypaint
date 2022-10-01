@@ -10,7 +10,7 @@ module CryPaint
   class CryPaintWindow < SF::RenderWindow
     @@MIN_VIEW_SIZE = 10_f32
     @@MAX_VIEW_SIZE = 100000_f32
-
+    @shader : SF::Shader?
     def initialize
       videomode = SF::VideoMode.new(1280, 720)
       title = "CryPaint ALPHA"
@@ -21,6 +21,7 @@ module CryPaint
       @undo_idx = 0
       @colors = CryPaint::Colors.new
       @draw_radius = 10
+      @interpolation_enabled = true
       @imagetex = SF::Texture.new
       @sprite = SF::Sprite.new(@imagetex)
       @has_image = false
@@ -30,12 +31,14 @@ module CryPaint
       @zoom_factor = 1.05
       @mouse_drag_start = Hash(SF::Mouse::Button, SF::Vector2i).new
       @previous_draw = Hash(SF::Mouse::Button, SF::Vector2f).new
+      @shader = nil
       @widgets = [] of CryWidget
       @widgets << ColorsWidget.new(@colors)
       @widgets << MousePosWidget.new
       @widgets << SpecialFxWidget.new(self, @colors)
-      @widgets << ToolsWidget.new(pointerof(@draw_radius))
+      @widgets << ToolsWidget.new(pointerof(@draw_radius), pointerof(@interpolation_enabled))
       @widgets << UndoWidget.new(@shapes, pointerof(@undo_idx))
+      @widgets << ShaderWidget.new(pointerof(@shader))
       self.framerate_limit = 120
       center_view()
     end
@@ -186,17 +189,26 @@ module CryPaint
 
         # only when mouse inside the current window
         if 0 < mousepos.x < size.x && 0 < mousepos.y < size.y
+          # TODO: refactor so Left and Right re-use same logic
           if SF::Mouse.button_pressed?(SF::Mouse::Button::Left)
-            if previous_coord = @previous_draw[SF::Mouse::Button::Left]?
-              draw_between(previous_coord, coord, @colors.primary)
+            if @interpolation_enabled
+              if previous_coord = @previous_draw[SF::Mouse::Button::Left]?
+                draw_between(previous_coord, coord, @colors.primary)
+              end
+              @previous_draw[SF::Mouse::Button::Left] = coord
+            else
+              draw_between(coord, coord, @colors.primary)
             end
-            @previous_draw[SF::Mouse::Button::Left] = coord
           end
           if SF::Mouse.button_pressed?(SF::Mouse::Button::Right)
-            if previous_coord = @previous_draw[SF::Mouse::Button::Right]?
-              draw_between(previous_coord, coord, @colors.secondary)
+            if @interpolation_enabled
+              if previous_coord = @previous_draw[SF::Mouse::Button::Right]?
+                draw_between(previous_coord, coord, @colors.secondary)
+              end
+              @previous_draw[SF::Mouse::Button::Right] = coord
+            else
+              draw_between(coord, coord, @colors.secondary)
             end
-            @previous_draw[SF::Mouse::Button::Right] = coord
           end
         end
 
@@ -286,9 +298,13 @@ module CryPaint
 
         draw(@sprite) if @has_image
 
+        if @shader.is_a? SF::Shader
+          SF::Shader.bind @shader.as(SF::Shader)
+        end
         @undo_idx.times do |i|
           draw(@shapes[i])
         end
+        SF::Shader.bind nil
 
         ImGui::SFML.render(self)
         display()
