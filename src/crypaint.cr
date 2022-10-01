@@ -29,6 +29,7 @@ module CryPaint
       # TODO: refactor the mouse handling business to separate class
       @zoom_factor = 1.05
       @mouse_drag_start = Hash(SF::Mouse::Button, SF::Vector2i).new
+      @previous_draw = Hash(SF::Mouse::Button, SF::Vector2f).new
       @widgets = [] of CryWidget
       @widgets << ColorsWidget.new(@colors)
       @widgets << MousePosWidget.new
@@ -136,6 +137,7 @@ module CryPaint
         @mouse_drag_start[event.button] = SF::Vector2i.new(event.x, event.y)
       elsif event.is_a? SF::Event::MouseButtonReleased
         @mouse_drag_start.delete(event.button)
+        @previous_draw.delete(event.button)
       end
     end
 
@@ -185,18 +187,16 @@ module CryPaint
         # only when mouse inside the current window
         if 0 < mousepos.x < size.x && 0 < mousepos.y < size.y
           if SF::Mouse.button_pressed?(SF::Mouse::Button::Left)
-            if previous_pos = @mouse_drag_start[SF::Mouse::Button::Left]?
-              prevcoord = map_pixel_to_coords(previous_pos)
-              draw_between(prevcoord, coord, @colors.primary)
+            if previous_coord = @previous_draw[SF::Mouse::Button::Left]?
+              draw_between(previous_coord, coord, @colors.primary)
             end
-            @mouse_drag_start[SF::Mouse::Button::Left] = mousepos
+            @previous_draw[SF::Mouse::Button::Left] = coord
           end
           if SF::Mouse.button_pressed?(SF::Mouse::Button::Right)
-            if previous_pos = @mouse_drag_start[SF::Mouse::Button::Right]?
-              prevcoord = map_pixel_to_coords(previous_pos)
-              draw_between(prevcoord, coord, @colors.secondary)
+            if previous_coord = @previous_draw[SF::Mouse::Button::Right]?
+              draw_between(previous_coord, coord, @colors.secondary)
             end
-            @mouse_drag_start[SF::Mouse::Button::Right] = mousepos
+            @previous_draw[SF::Mouse::Button::Right] = coord
           end
         end
 
