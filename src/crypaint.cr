@@ -35,6 +35,7 @@ module CryPaint
       @widgets << MousePosWidget.new
       @widgets << SpecialFxWidget.new(self, @colors)
       @widgets << ToolsWidget.new(pointerof(@draw_radius))
+      @widgets << UndoWidget.new(@shapes, pointerof(@undo_idx))
       self.framerate_limit = 120
       center_view()
     end
@@ -95,6 +96,15 @@ module CryPaint
       # invalidate the current "redo" queue on draw
       if @undo_idx < @shapes.size
         @shapes.pop(@shapes.size - @undo_idx)
+      end
+      unless @shapes.empty?
+        last_shape = @shapes[@undo_idx - 1]
+        return if (
+          last_shape.is_a? SF::CircleShape &&
+          shape.transform == last_shape.transform &&
+          shape.fill_color == last_shape.fill_color &&
+          shape.radius == last_shape.radius
+        )
       end
       @shapes << shape
       @undo_idx += 1
