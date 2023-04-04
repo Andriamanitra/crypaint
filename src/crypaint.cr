@@ -11,6 +11,7 @@ module CryPaint
     @@MIN_VIEW_SIZE = 10_f32
     @@MAX_VIEW_SIZE = 100000_f32
     @shader : SF::Shader?
+
     def initialize
       videomode = SF::VideoMode.new(1280, 720)
       title = "CryPaint ALPHA"
@@ -31,6 +32,8 @@ module CryPaint
       @zoom_factor = 1.05
       @mouse_drag_start = Hash(SF::Mouse::Button, SF::Vector2i).new
       @previous_draw = Hash(SF::Mouse::Button, SF::Vector2f).new
+      @should_save = false
+      @imgui_demo_visible = false
       @shader = nil
       @widgets = [] of CryWidget
       @widgets << ColorsWidget.new(@colors)
@@ -103,11 +106,11 @@ module CryPaint
       unless @shapes.empty?
         last_shape = @shapes[@undo_idx - 1]
         return if (
-          last_shape.is_a? SF::CircleShape &&
-          shape.transform == last_shape.transform &&
-          shape.fill_color == last_shape.fill_color &&
-          shape.radius == last_shape.radius
-        )
+                    last_shape.is_a? SF::CircleShape &&
+                    shape.transform == last_shape.transform &&
+                    shape.fill_color == last_shape.fill_color &&
+                    shape.radius == last_shape.radius
+                  )
       end
       @shapes << shape
       @undo_idx += 1
@@ -222,80 +225,94 @@ module CryPaint
       end
     end
 
+    def save_to_file(fname)
+      tex = SF::Texture.new(size.x, size.y)
+      tex.update(self)
+      img = tex.copy_to_image
+      img.save_to_file(fname)
+    end
+
+    def menubar
+      ImGui.main_menu_bar do
+        ImGui.menu("File") do
+          if ImGui.menu_item("New", "Ctrl+N")
+            new_drawing()
+          end
+          if ImGui.menu_item("Open", "Ctrl+O")
+            @file_open_dialog_visible = true
+          end
+          if ImGui.menu_item("Save", "Ctrl+S")
+            # TODO: ask for filename
+            @should_save = true
+          end
+        end
+        ImGui.menu("View") do
+          if ImGui.menu_item("ImGui demo", nil, @imgui_demo_visible)
+            @imgui_demo_visible = !@imgui_demo_visible
+          end
+          @widgets.each do |widget|
+            if ImGui.menu_item(widget.name_in_menu, nil, widget.visible?)
+              widget.toggle_visibility
+            end
+          end
+        end
+        ImGui.menu("Edit") do
+          if ImGui.menu_item("Undo", "Ctrl+Z")
+            undo()
+          end
+          if ImGui.menu_item("Redo", "Ctrl+Shift+Z")
+            redo()
+          end
+          ImGui.separator
+          ImGui.menu_item("(TODO) Cut", "Ctrl+X")
+          ImGui.menu_item("(TODO) Copy", "Ctrl+C")
+          ImGui.menu_item("(TODO) Paste", "Ctrl+V")
+        end
+      end
+    end
+
+    def render_imgui
+      menubar()
+
+      # Conditionally rendered ImGui elements
+      ImGui.show_demo_window if @imgui_demo_visible
+      if @file_open_dialog_visible
+        ImGui.open_popup("Open file..")
+        center = ImGui.get_main_viewport.get_center
+        modal_flags = ImGuiWindowFlags::AlwaysAutoResize
+        ImGui.set_next_window_pos(center, ImGuiCond::Appearing, ImVec2.new(0.5f32, 0.5f32))
+
+        ImGui.popup_modal("Open file..", flags: modal_flags) do
+          # TODO: ImGui.input_text
+          if ImGui.button("Cancel", ImVec2.new(120, 0))
+            ImGui.close_current_popup
+            @file_open_dialog_visible = false
+          end
+          ["test.png", "test2.png", "test3.png"].each do |fname|
+            ImGui.same_line
+            if ImGui.button(fname, ImVec2.new(120, 0))
+              if load_image(fname)
+                ImGui.close_current_popup
+                @file_open_dialog_visible = false
+              end
+            end
+          end
+        end
+      end
+
+      @widgets.each(&.show)
+    end
+
     def run
       ImGui::SFML.init(self)
-      imgui_demo_visible = false
-      clock = SF::Clock.new
       @file_open_dialog_visible = false
+      clock = SF::Clock.new
 
       while open?
-        clear()
         process_events()
+        clear()
 
         ImGui::SFML.update(self, clock.restart)
-
-        ImGui.main_menu_bar do
-          ImGui.menu("File") do
-            if ImGui.menu_item("New", "Ctrl+N")
-              new_drawing()
-            end
-            if ImGui.menu_item("Open", "Ctrl+O")
-              @file_open_dialog_visible = true
-            end
-            ImGui.menu_item("(TODO) Save", "Ctrl+S")
-          end
-          ImGui.menu("View") do
-            if ImGui.menu_item("ImGui demo", nil, imgui_demo_visible)
-              imgui_demo_visible = !imgui_demo_visible
-            end
-            @widgets.each do |widget|
-              if ImGui.menu_item(widget.name_in_menu, nil, widget.visible?)
-                widget.toggle_visibility
-              end
-            end
-          end
-          ImGui.menu("Edit") do
-            if ImGui.menu_item("Undo", "Ctrl+Z")
-              undo()
-            end
-            if ImGui.menu_item("Redo", "Ctrl+Shift+Z")
-              redo()
-            end
-            ImGui.separator
-            ImGui.menu_item("(TODO) Cut", "Ctrl+X")
-            ImGui.menu_item("(TODO) Copy", "Ctrl+C")
-            ImGui.menu_item("(TODO) Paste", "Ctrl+V")
-          end
-        end
-
-        # Conditionally rendered ImGui elements
-        ImGui.show_demo_window if imgui_demo_visible
-        if @file_open_dialog_visible
-          ImGui.open_popup("Open file..")
-          center = ImGui.get_main_viewport.get_center
-          modal_flags = ImGuiWindowFlags::AlwaysAutoResize
-          ImGui.set_next_window_pos(center, ImGuiCond::Appearing, ImVec2.new(0.5f32, 0.5f32))
-
-          ImGui.popup_modal("Open file..", flags: modal_flags) do
-            # TODO: ImGui.input_text
-            if ImGui.button("Cancel", ImVec2.new(120, 0))
-              ImGui.close_current_popup
-              @file_open_dialog_visible = false
-            end
-            ["test.png", "test2.png", "test3.png"].each do |fname|
-              ImGui.same_line
-              if ImGui.button(fname, ImVec2.new(120, 0))
-                if load_image(fname)
-                  ImGui.close_current_popup
-                  @file_open_dialog_visible = false
-                end
-              end
-            end
-          end
-        end
-
-        @widgets.each(&.show)
-
         draw(@sprite) if @has_image
 
         if @shader.is_a? SF::Shader
@@ -306,6 +323,11 @@ module CryPaint
         end
         SF::Shader.bind nil
 
+        if @should_save
+          save_to_file("screenshot.png")
+          @should_save = false
+        end
+        render_imgui()
         ImGui::SFML.render(self)
         display()
       end
