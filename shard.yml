@@ -16,6 +16,6 @@ targets:
   crypaint:
     main: src/crypaint.cr
 
-crystal: 1.5.1
+crystal: 1.13.1
 
 license: MIT
